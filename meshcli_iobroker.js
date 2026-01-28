@@ -57,9 +57,12 @@ on({id: /^mqtt\.3\.msh\..*\.json\..*$/, change: "any"}, function (obj) {
             }
 
             // Save in Chat Channel
-            const chatMsgPath = '0_userdata.0.Meshtastic.Chats.' + channelIdx + '.lastMessage';
-            if (getObject('0_userdata.0.Meshtastic.Chats.' + channelIdx)) {
-                setState(chatMsgPath, `${displayName}: ${text}`, true);
+            const chatPath = '0_userdata.0.Meshtastic.Chats.' + channelIdx;
+            if (getObject(chatPath)) {
+                setState(chatPath + '.lastMessage', `${displayName}: ${text}`, true);
+                
+                // --- add to history ---
+                addToHistory(channelIdx, displayName, text);
             }
 
             log(`Meshtastic Chat [${channelIdx}]: ${displayName} sagt "${text}"`);
@@ -283,9 +286,59 @@ function createChats() {
             },
             native: {}
         });
+
+        // message history as JSON (read-only)
+        setObject('0_userdata.0.Meshtastic.Chats.' + chatObj.id + '.history', {
+            type: 'state',
+            common: { 
+                name: 'Chat Historie JSON', 
+                type: 'string', 
+                role: 'json', 
+                read: true, 
+                write: false 
+           },
+           native: {}
+         });
     });
 }
 
+/**
+ * Fügt eine Nachricht zum JSON-Verlauf eines Kanals hinzu
+ * @param {number} channelIdx - Index des Kanals (0, 1, 2...)
+ * @param {string} senderName - Aufgelöster Name oder ID des Absenders
+ * @param {string} messageText - Inhalt der Nachricht
+ */
+function addToHistory(channelIdx, senderName, messageText) {
+    const historyPath = '0_userdata.0.Meshtastic.Chats.' + channelIdx + '.history';
+    const maxEntries = 20; // how many messages should be kept?
+    
+    let history = [];
+    let currentState = getState(historyPath);
+    
+    if (currentState && currentState.val) {
+        try {
+            history = JSON.parse(currentState.val);
+        } catch (e) { history = []; }
+    }
+
+    // message history object
+    const newEntry = {
+        ts: Date.now(),
+        time: formatDate(new Date(), "hh:mm"),
+        from: senderName,
+        text: messageText
+    };
+
+    // add message above (newest first)
+    history.unshift(newEntry);
+
+    // limit entries
+    if (history.length > maxEntries) {
+        history = history.slice(0, maxEntries);
+    }
+
+    setState(historyPath, JSON.stringify(history), true);
+}
 
 // ======================================================
 // 6. Command Listener + CLI Actions
