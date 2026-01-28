@@ -73,25 +73,25 @@ on({id: /^mqtt\.3\.msh\..*\.json\..*$/, change: "any"}, function (obj) {
 });
 
 // Trigger für Nachrichten an Kanäle (Chats)
-on({id: /^0_userdata\.0\.Meshtastic\.Chats\.\d+\.sendMessage$/, change: "any", ack: false}, function (obj) {
+on({id: /^0_userdata\.0\.Meshtastic\.Chats\.\d+\.sendMessage$/, change: "any"}, function (obj) {
     const msg = obj.state.val;
-    if (!msg || msg === "") return;
+    
+    // WICHTIG: Nur senden, wenn das Feld nicht leer ist UND wenn ack=false ist 
+    // ODER wenn es von einem anderen Skript kommt.
+    if (!msg || msg === "" || obj.state.ack === true) return;
 
     const parts = obj.id.split('.');
-    // parseInt stellt sicher, dass channelId eine Nummer ist
     const channelId = parseInt(parts[parts.length - 2]); 
     
     log(`Meshtastic: Sende Nachricht an Kanal ${channelId}: ${msg}`);
 
-    // In der CLI-Exec wird channelId wieder zum String für den Befehl, 
-    // aber für addToHistory ist es nun die korrekte Nummer.
     exec(`/home/iobroker/.local/bin/meshtastic --host ${deviceIp} --ch-index ${channelId} --sendtext "${msg}"`, function (error, result, stderr) {
         if (error) {
             log(`Fehler beim Senden: ${stderr}`, 'error');
         } else {
+            // Wir leeren das Feld mit ack: true. 
+            // Das löst zwar den Trigger erneut aus, aber das "if (!msg)" oben bricht es dann sofort ab.
             setState(obj.id, "", true); 
-            // Jetzt passt der Typ für den ersten Parameter (number)
-            addToHistory(channelId, "ICH (ioBroker)", msg);
         }
     });
 });
@@ -355,7 +355,7 @@ function addToHistory(channelIdx, senderName, messageText) {
     const basePath = '0_userdata.0.Meshtastic.Chats.' + channelIdx;
     const historyPath = basePath + '.history';
     const htmlPath = basePath + '.history_html';
-    const maxEntries = 20; // Anzahl der gespeicherten Nachrichten
+    const maxEntries = 10; // Anzahl der gespeicherten Nachrichten
     
     // --- 1. JSON HISTORY (für Jarvis JsonTable) ---
     let history = [];
