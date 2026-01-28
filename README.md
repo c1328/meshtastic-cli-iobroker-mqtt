@@ -18,7 +18,7 @@ Ziel ist es, Meshtastic-Netzwerke in ioBroker sichtbar und steuerbar zu machen:
   send TraceRoute, Ping, Message, u.v.m.
 
 - **Echtzeit-Chat** via MQTT  
-  Nachrichtenempfang (LoRa & MQTT) direkt in ioBroker-Datenpunkten
+  Nachrichtenempfang und Sendung (LoRa & MQTT) direkt in ioBroker-Datenpunkten
 
 - **Multi-Kanal Support**  
   Primary/Secondary Channels werden unterstützt
