@@ -30,10 +30,10 @@ Ziel ist es, Meshtastic-Netzwerke in ioBroker sichtbar und steuerbar zu machen:
 
 ## 📋 Voraussetzungen
 
-- Meshtastic Gerät (LAN oder USB)  
-- ioBroker mit JavaScript- und MQTT-Adapter  
-- Python 3 + Meshtastic CLI  
-- Mosquitto Broker als lokales MQTT-Gateway/Bridge 
+- Meshtastic Gerät (LAN oder USB) -> Mein Szenario: Heltec V3 mit Meshtastic Firmware 2.7.18 angebunden über WLAN
+- ioBroker mit JavaScript- und MQTT-Adapter -> Mein Szenario: ioBroker v7.7.22 mit JS adapter 9.0.11
+- Python 3 + Meshtastic CLI -> Mein Szenario: Debian Bookworm mit Python 3.11 und meshtastic cli 2.7.7
+- Mosquitto Broker als lokales MQTT-Gateway/Bridge -> Mein Szenario: Mosquitto 2.0.11 aus dem Standard Debian Repo
 
 ---
 
@@ -92,7 +92,11 @@ Zusätzlich muss natürlich die soeben konfigurierte Mosquitto Bridge in der Nod
 
 - Private Channels bleiben lokal  
 - Node kann nur an einen Broker angebunden werden, Mosquitto übernimmt hier die Verteilung an mehrere Server  
-- Selektives Topic-Forwarding möglich  
+- Selektives Topic-Forwarding möglich
+
+```bash
+apt install mosquitto-clients 
+```
 
 Beispiel für: `/etc/mosquitto/conf.d/mqtt.meshtastic.org.conf`
 
