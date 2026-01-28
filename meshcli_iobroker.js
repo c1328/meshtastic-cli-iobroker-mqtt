@@ -3,7 +3,7 @@
 // Meshtastic ioBroker Integration Kit (Full Script)
 
 // Configuration of IP adress of meshtastic node that is connected via TCP
-var deviceIp = '192.168.25.205';
+var deviceIp = '<IP-of-your-meshtastic-node>';
 // Configuration of MQTT instance that is used (in my case 3rd instance)
 var mqttPath = 'mqtt.3.msh.*.json.*'; 
  
