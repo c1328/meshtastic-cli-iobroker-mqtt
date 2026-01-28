@@ -9,8 +9,8 @@ var mqttPath = 'mqtt.3.msh.*.json.*';
  
 var chats = [
     { name: 'Default', id: 0 },
-    { name: 'Puig', id: 1 },
-    { name: 'Baleares', id: 2 }
+    { name: '<private channel>', id: 1 },
+    { name: '<public channel>', id: 2 }
 ];
 
 
@@ -308,36 +308,71 @@ function createChats() {
  * @param {string} senderName - Aufgelöster Name oder ID des Absenders
  * @param {string} messageText - Inhalt der Nachricht
  */
+/**
+ * Fügt eine Nachricht zum JSON-Verlauf und HTML-String eines Kanals hinzu
+ * @param {number} channelIdx - Index des Kanals (0, 1, 2...)
+ * @param {string} senderName - Aufgelöster Name oder ID des Absenders
+ * @param {string} messageText - Inhalt der Nachricht
+ */
 function addToHistory(channelIdx, senderName, messageText) {
-    const historyPath = '0_userdata.0.Meshtastic.Chats.' + channelIdx + '.history';
-    const maxEntries = 20; // how many messages should be kept?
+    const basePath = '0_userdata.0.Meshtastic.Chats.' + channelIdx;
+    const historyPath = basePath + '.history';
+    const htmlPath = basePath + '.history_html';
+    const maxEntries = 20; // Anzahl der gespeicherten Nachrichten
     
+    // --- 1. JSON HISTORY (für Jarvis JsonTable) ---
     let history = [];
-    let currentState = getState(historyPath);
-    
-    if (currentState && currentState.val) {
+    if (existsState(historyPath)) {
+        let currentState = getState(historyPath).val;
         try {
-            history = JSON.parse(currentState.val);
+            history = JSON.parse(currentState) || [];
         } catch (e) { history = []; }
     }
 
-    // message history object
+    // Neues Objekt erstellen
     const newEntry = {
         ts: Date.now(),
-        time: formatDate(new Date(), "hh:mm"),
+        time: formatDate(new Date(), "HH:mm"),
         from: senderName,
         text: messageText
     };
 
-    // add message above (newest first)
+    // Oben einfügen & Kürzen
     history.unshift(newEntry);
+    if (history.length > maxEntries) history = history.slice(0, maxEntries);
 
-    // limit entries
-    if (history.length > maxEntries) {
-        history = history.slice(0, maxEntries);
-    }
-
+    // JSON Speichern
     setState(historyPath, JSON.stringify(history), true);
+
+
+    // --- 2. HTML HISTORY (für Jarvis StateHTML / Messenger-Look) ---
+    let html = '<div style="display:flex; flex-direction:column; gap:10px; font-family:sans-serif;">';
+    
+    history.forEach(m => {
+        html += `
+        <div style="background:rgba(128,128,128,0.1); padding:8px 12px; border-radius:12px; border-left:4px solid #009688; max-width:95%;">
+            <div style="font-size:0.75em; opacity:0.6; margin-bottom:4px;">
+                <span style="font-weight:bold; color:#009688;">${m.from}</span> • ${m.time}
+            </div>
+            <div style="font-size:0.95em; line-height:1.3; word-wrap:break-word;">
+                ${m.text}
+            </div>
+        </div>`;
+    });
+    
+    html += '</div>';
+
+    // HTML Datenpunkt prüfen und schreiben
+    if (!existsState(htmlPath)) {
+        setObject(htmlPath, {
+            type: 'state',
+            common: { name: 'Chat Historie HTML', type: 'string', role: 'html', read: true, write: false },
+            native: {}
+        });
+        setTimeout(() => { setState(htmlPath, html, true); }, 200);
+    } else {
+        setState(htmlPath, html, true);
+    }
 }
 
 // ======================================================
