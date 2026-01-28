@@ -72,6 +72,49 @@ on({id: /^mqtt\.3\.msh\..*\.json\..*$/, change: "any"}, function (obj) {
     }
 });
 
+// Trigger für Nachrichten an Kanäle (Chats)
+on({id: /^0_userdata\.0\.Meshtastic\.Chats\.\d+\.sendMessage$/, change: "any", ack: false}, function (obj) {
+    const msg = obj.state.val;
+    if (!msg || msg === "") return;
+
+    const parts = obj.id.split('.');
+    // parseInt stellt sicher, dass channelId eine Nummer ist
+    const channelId = parseInt(parts[parts.length - 2]); 
+    
+    log(`Meshtastic: Sende Nachricht an Kanal ${channelId}: ${msg}`);
+
+    // In der CLI-Exec wird channelId wieder zum String für den Befehl, 
+    // aber für addToHistory ist es nun die korrekte Nummer.
+    exec(`/home/iobroker/.local/bin/meshtastic --host ${deviceIp} --ch-index ${channelId} --sendtext "${msg}"`, function (error, result, stderr) {
+        if (error) {
+            log(`Fehler beim Senden: ${stderr}`, 'error');
+        } else {
+            setState(obj.id, "", true); 
+            // Jetzt passt der Typ für den ersten Parameter (number)
+            addToHistory(channelId, "ICH (ioBroker)", msg);
+        }
+    });
+});
+
+// Trigger für Direktnachrichten an einzelne Nodes
+on({id: /^0_userdata\.0\.Meshtastic\.Nodes\..*\.command\.sendMessage$/, change: "any", ack: false}, function (obj) {
+    const msg = obj.state.val;
+    if (!msg || msg === "") return;
+
+    const parts = obj.id.split('.');
+    const nodeId = parts[parts.length - 3]; // Pfad ist Nodes.ID.command.sendMessage
+    
+    log(`Meshtastic: Sende Direktnachricht an !${nodeId}: ${msg}`);
+
+    exec(`/home/iobroker/.local/bin/meshtastic --host ${deviceIp} --dest "!${nodeId}" --sendtext "${msg}"`, function (error, result, stderr) {
+        if (error) {
+            log(`Fehler beim Senden an Node: ${stderr}`, 'error');
+        } else {
+            setState(obj.id, "", true); 
+        }
+    });
+});
+
 // ======================================================
 // 2. CLI Node Polling + Parsing
 // ======================================================
@@ -302,12 +345,6 @@ function createChats() {
     });
 }
 
-/**
- * Fügt eine Nachricht zum JSON-Verlauf eines Kanals hinzu
- * @param {number} channelIdx - Index des Kanals (0, 1, 2...)
- * @param {string} senderName - Aufgelöster Name oder ID des Absenders
- * @param {string} messageText - Inhalt der Nachricht
- */
 /**
  * Fügt eine Nachricht zum JSON-Verlauf und HTML-String eines Kanals hinzu
  * @param {number} channelIdx - Index des Kanals (0, 1, 2...)
