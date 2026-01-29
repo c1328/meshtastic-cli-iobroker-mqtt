@@ -22,30 +22,30 @@ on({id: /^mqtt\.3\.msh\..*\.json\..*$/, change: "any"}, function (obj) {
         if (!obj.state.val) return;
         const msg = JSON.parse(obj.state.val);
 
-        if (msg.payload && msg.payload.text) {
-            const text = msg.payload.text;
-            const channelIdx = msg.channel || 0;
+        // Basis-Daten extrahieren
+        const channelIdx = parseInt(msg.channel) || 0;
+        
+        // ID generieren: Dezimal zu Hex, Kleinbuchstaben, ohne !, aufgefüllt auf 8 Stellen
+        let senderHex = parseInt(msg.from).toString(16).toLowerCase().replace('!', '').padStart(8, '0');
+        const nodeBasePath = '0_userdata.0.Meshtastic.Nodes.' + senderHex;
 
-            let senderHex = parseInt(msg.from).toString(16).toLowerCase();
-            const nodeBasePath = '0_userdata.0.Meshtastic.Nodes.' + senderHex;
+        // --- Namensauflösung ---
+        let displayName = senderHex;
+        if (existsState(nodeBasePath + '.info.alias')) {
+            let aliasVal = getState(nodeBasePath + '.info.alias').val;
+            if (aliasVal && aliasVal !== 'N/A' && aliasVal !== '') displayName = aliasVal;
+        } else if (existsState(nodeBasePath + '.info.user')) {
+            let userVal = getState(nodeBasePath + '.info.user').val;
+            if (userVal && userVal !== 'N/A' && userVal !== '') displayName = userVal;
+        }
+
+        // --- FALL 1: TEXTNACHRICHTEN ---
+        if (msg.type === "text" && msg.payload && msg.payload.text) {
+            const text = msg.payload.text;
             const nodeMsgPath = nodeBasePath + '.info.lastMessage';
 
-            // --- Name Resolution ---
-            let displayName = senderHex;
-            let aliasPath = nodeBasePath + '.info.alias';
-            let userPath = nodeBasePath + '.info.user';
-
-            if (existsState(aliasPath)) {
-                let aliasVal = getState(aliasPath).val;
-                if (aliasVal && aliasVal !== 'N/A') {
-                    displayName = aliasVal;
-                } else if (existsState(userPath)) {
-                    displayName = getState(userPath).val;
-                }
-            }
-
-            // Save in Node Info
-            if (getObject(nodeBasePath)) {
+            // In Node Info speichern
+            if (existsObject(nodeBasePath)) {
                 if (!existsState(nodeMsgPath)) {
                     setObject(nodeMsgPath, {
                         type: 'state',
@@ -56,64 +56,95 @@ on({id: /^mqtt\.3\.msh\..*\.json\..*$/, change: "any"}, function (obj) {
                 setState(nodeMsgPath, text, true);
             }
 
-            // Save in Chat Channel
+            // In Chat & Historie speichern
             const chatPath = '0_userdata.0.Meshtastic.Chats.' + channelIdx;
-            if (getObject(chatPath)) {
+            if (existsObject(chatPath)) {
                 setState(chatPath + '.lastMessage', `${displayName}: ${text}`, true);
-                
-                // --- add to history ---
                 addToHistory(channelIdx, displayName, text);
+            } else {
+                log(`Chat-Kanal ${channelIdx} nicht gefunden unter ${chatPath}`, "warn");
             }
+            log(`Meshtastic Text: [Kanal ${channelIdx}] ${displayName}: ${text}`);
+        }
 
-            log(`Meshtastic Chat [${channelIdx}]: ${displayName} sagt "${text}"`);
+        // --- FALL 2: POSITIONSDATEN ---
+        else if (msg.type === "position" && msg.payload) {
+            const p = msg.payload;
+            const infoPath = nodeBasePath + '.info.';
+
+            if (p.latitude_i && p.longitude_i) {
+                // Umrechnung von Meshtastic Integer zu Float
+                const lat = p.latitude_i / 10000000;
+                const lon = p.longitude_i / 10000000;
+                const alt = p.altitude || 0;
+
+                if (existsObject(nodeBasePath)) {
+                    // Einzelne Datenpunkte setzen
+                    setState(infoPath + 'latitude', lat, true);
+                    setState(infoPath + 'longitude', lon, true);
+                    setState(infoPath + 'altitude', alt, true);
+                    
+                    // Kombiniertes Location-Feld für Jarvis/Maps (lat,lon)
+                    setState(infoPath + 'location', `${lat},${lon}`, true);
+
+                    log(`Meshtastic Position: ${displayName} ist bei ${lat}, ${lon}`);
+                }
+            }
         }
     } catch (e) {
         log("Fehler im MQTT Trigger: " + e, "error");
     }
 });
 
+
 // Trigger für Nachrichten an Kanäle (Chats)
 on({id: /^0_userdata\.0\.Meshtastic\.Chats\.\d+\.sendMessage$/, change: "any"}, function (obj) {
     const msg = obj.state.val;
-    
-    // WICHTIG: Nur senden, wenn das Feld nicht leer ist UND wenn ack=false ist 
-    // ODER wenn es von einem anderen Skript kommt.
     if (!msg || msg === "" || obj.state.ack === true) return;
 
     const parts = obj.id.split('.');
     const channelId = parseInt(parts[parts.length - 2]); 
     
-    log(`Meshtastic: Sende Nachricht an Kanal ${channelId}: ${msg}`);
+    // Log-Fix: Falls obj.from undefined ist, nutzen wir einen Fallback
+    const source = obj.from || "Skript/System";
+    
+    // Sonderzeichen-Schutz: Wir entfernen einfache Anführungszeichen aus der Nachricht,
+    // um den Shell-Befehl nicht zu brechen.
+    const safeMsg = msg.replace(/'/g, ""); 
 
-    exec(`/home/iobroker/.local/bin/meshtastic --host ${deviceIp} --ch-index ${channelId} --sendtext "${msg}"`, function (error, result, stderr) {
+    log(`Meshtastic: Sende an Kanal ${channelId} (von ${source}): ${safeMsg}`);
+
+    // Wir umschließen die Nachricht in EINFACHE Anführungszeichen (') für die Shell
+    const command = `/home/iobroker/.local/bin/meshtastic --host ${deviceIp} --ch-index ${channelId} --sendtext '${safeMsg}'`;
+
+    exec(command, function (error, stdout, stderr) {
         if (error) {
-            log(`Fehler beim Senden: ${stderr}`, 'error');
+            log(`Fehler beim Senden (Kanal ${channelId}): ${stderr || error}`, 'error');
         } else {
-            // Wir leeren das Feld mit ack: true. 
-            // Das löst zwar den Trigger erneut aus, aber das "if (!msg)" oben bricht es dann sofort ab.
-            setState(obj.id, "", true); 
+            // Feld leeren nach Erfolg
+            setTimeout(() => setState(obj.id, "", true), 500);
         }
     });
 });
 
-// Trigger für Direktnachrichten an einzelne Nodes
+// 2. Trigger für Direktnachrichten (Nodes)
 on({id: /^0_userdata\.0\.Meshtastic\.Nodes\..*\.command\.sendMessage$/, change: "any", ack: false}, function (obj) {
     const msg = obj.state.val;
     if (!msg || msg === "") return;
 
     const parts = obj.id.split('.');
-    const nodeId = parts[parts.length - 3]; // Pfad ist Nodes.ID.command.sendMessage
-    
-    log(`Meshtastic: Sende Direktnachricht an !${nodeId}: ${msg}`);
+    const nodeId = parts[parts.length - 3]; 
+    const safeMsg = msg.replace(/"/g, '\\"');
 
-    exec(`/home/iobroker/.local/bin/meshtastic --host ${deviceIp} --dest "!${nodeId}" --sendtext "${msg}"`, function (error, result, stderr) {
-        if (error) {
-            log(`Fehler beim Senden an Node: ${stderr}`, 'error');
-        } else {
-            setState(obj.id, "", true); 
+    log(`Meshtastic: Sende Direktnachricht an !${nodeId}: ${safeMsg}`);
+
+    exec(`/home/iobroker/.local/bin/meshtastic --host ${deviceIp} --dest "!${nodeId}" --sendtext "${safeMsg}"`, function (error) {
+        if (!error) {
+            setTimeout(() => setState(obj.id, "", true), 500);
         }
     });
 });
+
 
 // ======================================================
 // 2. CLI Node Polling + Parsing
@@ -258,30 +289,41 @@ function createNodeStates(id) {
 function updateNode(data) {
 
     function parseNum(val) {
-        if (!val || val === "N/A") return 0;
+        if (!val || val === "N/A" || val === "Powered") return 0;
+        // Entfernt Einheiten wie %, m, dB und konvertiert zu Number
         return parseFloat(val.replace(/[^\d.-]/g, "")) || 0;
     }
 
     const path = '0_userdata.0.Meshtastic.Nodes.' + data.ID + '.info.';
 
-    setState(path + "id", data.N, true);
-    setState(path + "user", data.User, true);
-    setState(path + "alias", data.AKA, true);
+    // Basis-Informationen
+    setState(path + "id", data.N || "N/A", true);
+    setState(path + "user", data.User || "N/A", true);
+    setState(path + "alias", data.AKA || "N/A", true);
 
+    // Standort-Logik
     let lat = parseNum(data.Latitude);
     let lon = parseNum(data.Longitude);
 
-    setState(path + "latitude", lat, true);
-    setState(path + "longitude", lon, true);
-    setState(path + "location", lat + ", " + lon, true);
+    // Nur aktualisieren, wenn echte Koordinaten geliefert werden (verhindert 0,0 Sprünge)
+    if (lat !== 0 && lon !== 0) {
+        setState(path + "latitude", lat, true);
+        setState(path + "longitude", lon, true);
+        // Format lat,lon (ohne Leerzeichen) für Jarvis Maps
+        setState(path + "location", lat + "," + lon, true);
+    }
 
+    // Hardware- & Netzparameter
     setState(path + "altitude", parseNum(data.Altitude), true);
     setState(path + "chanUtil", parseNum(data["Channel util."]), true);
     setState(path + "txAir", parseNum(data["Tx air util."]), true);
     setState(path + "snr", parseNum(data.SNR), true);
-    setState(path + "channel", data.Channel, true);
-    setState(path + "lastHeard", data.LastHeard, true);
-    setState(path + "battery", parseNum(data.Battery), true);
+    setState(path + "channel", data.Channel || "0", true);
+    setState(path + "lastHeard", data.LastHeard || "N/A", true);
+    
+    // Batterie-Sonderbehandlung für "Powered"
+    let battVal = data.Battery === 'Powered' ? 100 : parseNum(data.Battery);
+    setState(path + "battery", battVal, true);
 }
 
 // ======================================================
@@ -342,6 +384,19 @@ function createChats() {
            },
            native: {}
          });
+        
+        // message history as JSON html (read-only)
+         setObject('0_userdata.0.Meshtastic.Chats.' + chatObj.id + '.history_html', {
+            type: 'state',
+            common: { 
+                name: 'Chat Historie HTML', 
+                type: 'string', 
+                role: 'html', 
+                read: true, 
+                write: false 
+           },
+          native: {}
+         });
     });
 }
 
@@ -369,7 +424,7 @@ function addToHistory(channelIdx, senderName, messageText) {
     // Neues Objekt erstellen
     const newEntry = {
         ts: Date.now(),
-        time: formatDate(new Date(), "HH:mm"),
+        time: formatDate(new Date(), "hh:mm"),
         from: senderName,
         text: messageText
     };
@@ -463,11 +518,23 @@ function sendChatMessage(chatId, message) {
 }
 
 // ======================================================
-// INIT
+// 6. INITIALISIERUNG & START
 // ======================================================
+
+// Erstellt die Grundstruktur (nur beim ersten Start relevant)
 createChannels();
 createChats();
-registerEndpointListeners();
 
-updateNodes();
-setInterval(updateNodes, 300000);
+// Erster Abruf der Nodes beim Skriptstart
+setTimeout(function() {
+    log("Meshtastic: Initialer Node-Abruf gestartet...");
+    updateNodes();
+}, 2000);
+
+// Regelmäßiges Polling der Node-Liste (alle 5 Minuten)
+setInterval(function() {
+    log("Meshtastic: Geplanter Node-Abruf läuft...");
+    updateNodes();
+}, 300000);
+
+log("Meshtastic: Skript erfolgreich initialisiert. MQTT-Trigger aktiv.");
