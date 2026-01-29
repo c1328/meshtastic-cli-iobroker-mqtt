@@ -149,7 +149,7 @@ pip install meshtastic-mqtt-json
 
 - Wir brauchen ein kleines Python Script, welches uns die Nachrichten und Positionsdaten, die verschlüsselt über einen öffentlichen MQTT Server unter msh/EU_868/2/e/<channel>/ kommen, entschlüsselt und in der gleichen Form unter msh/EU_868/2/json/<channel> ablegt wie es eine Meshtastic Node tun würde.
 - Die restlichen restlichen Telemetriedaten sind nicht so zeitkritisch und können zyklisch über den meshtastic-cli geholt werden.
-- Je Kanal der gelesen werden soll wird eine entsprechend konfigurierte Datei gebraucht.
+- Je Kanal der gelesen werden soll wird eine entsprechend konfigurierte Datei gebraucht. Beispiel: mqtt-json-parse.py
 
 ```python
 import json
