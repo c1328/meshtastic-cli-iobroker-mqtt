@@ -34,6 +34,7 @@ Ziel ist es, Meshtastic-Netzwerke in ioBroker sichtbar und steuerbar zu machen:
 - ioBroker mit JavaScript- und MQTT-Adapter -> Mein Szenario: ioBroker v7.7.22 mit JS adapter 9.0.11
 - Python 3 + Meshtastic CLI -> Mein Szenario: Debian Bookworm mit Python 3.11 und meshtastic cli 2.7.7
 - Mosquitto Broker als lokales MQTT-Gateway/Bridge -> Mein Szenario: Mosquitto 2.0.11 aus dem Standard Debian Repo
+- Meshtastic MQTT Parser für Nachrichten die über einen öffentlichen MQTT kommen, denn die werden von der Node ja nicht nochmal als entschlüsseltes JSON zurückgegeben -> Mein Szenarion: https://github.com/acidvegas/meshtastic-mqtt-json R2.0.0 aus dem Server hinterlegt, auf dem auch die Mosquitto Bridge läuft
 
 ---
 
@@ -138,7 +139,116 @@ systemctl restart mosquitto.service
 
 ---
 
-### 4. Konfigurieren der MQTT Instanz in ioBroker
+### 4. Meshtastic MQTT Parser installieren
+
+- Der Meshtastic MQTT Parser wird auf dem gleichen Server installiert, wo auch der zuvor installierte Mosquitto Server läuft. Hier das GitHub Repo: https://github.com/acidvegas/meshtastic-mqtt-json
+
+```bash
+pip install meshtastic-mqtt-json
+```
+
+- Wir brauchen ein kleines Python Script, welches uns die Nachrichten und Positionsdaten, die verschlüsselt über einen öffentlichen MQTT Server unter msh/EU_868/2/e/<channel>/ kommen, entschlüsselt und in der gleichen Form unter msh/EU_868/2/json/<channel> ablegt wie es eine Meshtastic Node tun würde.
+- Die restlichen restlichen Telemetriedaten sind nicht so zeitkritisch und können zyklisch über den meshtastic-cli geholt werden.
+- Je Kanal der gelesen werden soll wird eine entsprechend konfigurierte Datei gebraucht.
+
+```python
+import json
+import time
+import paho.mqtt.client as mqtt
+from meshtastic_mqtt_json import MeshtasticMQTT
+
+# --- KONFIGURATION ---
+LOCAL_BROKER = "<ip-of-your-mosquitto-server"
+LOCAL_PORT = 1883
+LOCAL_USER = "<username>"
+LOCAL_PASS = "<password>"
+
+# Kanal-Details
+CHANNEL_NAME = "<channel-name>"
+CHANNEL_INDEX = <channel-id/numer>
+CHANNEL_KEY = "<channel-key>"
+REGION = "EU_868"
+ENCRYPTED_ROOT = f"msh/{REGION}/2/e/"
+
+# --- SETUP LOKALER PUBLISHER ---
+publisher = mqtt.Client()
+publisher.username_pw_set(LOCAL_USER, LOCAL_PASS)
+publisher.connect(LOCAL_BROKER, LOCAL_PORT)
+publisher.loop_start()
+
+def send_to_iobroker(sender_id_dec, msg_type, payload_data):
+    """Baut das Meshtastic-JSON-Format nach und sendet es lokal."""
+    sender_id_hex = hex(sender_id_dec)[2:].lower().zfill(8)
+    # Ziel-Topic für den ioBroker JavaScript-Trigger
+    topic = f"msh/{REGION}/2/json/{CHANNEL_NAME}/!{sender_id_hex}"
+    
+    full_payload = {
+        "from": sender_id_dec,
+        "channel": CHANNEL_INDEX,
+        "type": msg_type,
+        "payload": payload_data,
+        "timestamp": int(time.time())
+    }
+    publisher.publish(topic, json.dumps(full_payload), qos=1)
+
+# --- CALLBACKS ---
+
+def on_text_message(json_data):
+    """Verarbeitet reine Textnachrichten."""
+    # json_data["decoded"]["payload"] enthält bei Textnachrichten den String
+    send_to_iobroker(json_data["from"], "text", {"text": json_data["decoded"]["payload"]})
+    print(f'Relayed Text: {json_data["decoded"]["payload"]}')
+
+def on_position(json_data):
+    """Verarbeitet GPS-Positionen."""
+    # json_data["decoded"]["payload"] enthält hier das Positions-Objekt
+    p = json_data["decoded"]["payload"]
+    
+    # Payload-Struktur für dein ioBroker-Skript aufbauen
+    # Meshtastic nutzt oft latitude_i (Integer) statt Float für Präzision
+    pos_payload = {
+        "latitude_i": p.get("latitude_i"),
+        "longitude_i": p.get("longitude_i"),
+        "altitude": p.get("altitude")
+    }
+    
+    send_to_iobroker(json_data["from"], "position", pos_payload)
+    print(f'Relayed Position Update from {json_data["from"]}')
+
+# --- SETUP DECRYPTOR ---
+decryptor = MeshtasticMQTT()
+
+# Registrierung der gewünschten Callbacks
+decryptor.register_callback('TEXT_MESSAGE_APP', on_text_message)
+decryptor.register_callback('POSITION_APP', on_position)
+
+# Authentifizierung am internen Client setzen
+if hasattr(decryptor, '_client'):
+    decryptor._client.username_pw_set(LOCAL_USER, LOCAL_PASS)
+
+# Verbindung zum lokalen Broker herstellen
+decryptor.connect(
+    LOCAL_BROKER,
+    LOCAL_PORT,
+    ENCRYPTED_ROOT,
+    CHANNEL_NAME,
+    LOCAL_USER,
+    LOCAL_PASS,
+    CHANNEL_KEY
+)
+```
+
+Das Script kann für den Test mit Screen im Hintergrund laufen lassen:
+
+```bash
+screen -S <channel-name>
+python <scriptname.py>
+CTRL-A-D
+```
+
+---
+
+### 5. Konfigurieren der MQTT Instanz in ioBroker
 
 - Eine MQTT Instanz im ioBroker muss auf unsere Mosquitto Bridge konfiguriert werden
 - IP, Port, Username und Password müssen auf die Bridge zeigen
@@ -147,7 +257,7 @@ systemctl restart mosquitto.service
 
 ---
 
-### 5. JS script in ioBroker anlegen und aktivieren
+### 6. JS script in ioBroker anlegen und aktivieren
 
 - Das Script meshcli_iobroker.js als JS in ioBroker anlegen und die Konfigurationen im oberen Abschnitt des Scripts an die eigenen Bedürfnisse anpassen
 - Damit das Script Datenpunkte anlegen kann, muss "Enable command "setObject"" in der JS Instanz erlaubt werden
@@ -219,6 +329,8 @@ Das Skript arbeitet hybrid:
 ** Performance: keine Abhängigkeit von langsamen Public-Brokern
 
 ** Integration: Senden und Empfangen beliebiger Nachrichten bzw. Steuermöglichkeit des ioBroker durch Nachrichten
+
+** Visualisierung in VIS/Jarvis: Sowohl die Positionen als auch der Chatverlauf kann über die History bzw. History-HTML Datenpunkte leicht visualiert werden
 
 
 
