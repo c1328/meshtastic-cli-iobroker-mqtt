@@ -78,14 +78,19 @@ Mosquitto muss nach der Konfiguration natürlich neu gestartet werden.
 systemctl restart mosquitto.service
 ```
 
-MQTT + JSON aktivieren an der Node:
+Auf der Node nun MQTT aktivieren + JSON deaktivieren:
 
 ```bash
 meshtastic --host <IP-of-your-meshtastic-node> --set mqtt.enabled true
-meshtastic --host <IP-of-your-meshtastic-node> --set mqtt.json_enabled true
 ```
 
-Zusätzlich muss natürlich die soeben konfigurierte Mosquitto Bridge in der Node konfiguriert werden mit Adresse, Port, Username und Password.
+Da der Meshtastic-MQTT-Parser uns perfekt formatierte Nachrichten und Positionsdaten liefert können wir JSON auf der Node deaktivieren - das spart auf der Node auch etwas Ressourcen
+
+```bash
+meshtastic --host <IP-of-your-meshtastic-node> --set mqtt.json_enabled false
+```
+
+Zusätzlich muss natürlich die soeben konfigurierte Mosquitto Bridge auf der Node konfiguriert werden mit Adresse, Port und ggf. Username und Password.
 
 ---
 
@@ -165,7 +170,7 @@ LOCAL_PASS = "<password>"
 
 # Kanal-Details
 CHANNEL_NAME = "<channel-name>"
-CHANNEL_INDEX = <channel-id/numer>
+CHANNEL_INDEX = <channel-id/number>
 CHANNEL_KEY = "<channel-key>"
 REGION = "EU_868"
 ENCRYPTED_ROOT = f"msh/{REGION}/2/e/"
