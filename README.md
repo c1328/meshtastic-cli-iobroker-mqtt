@@ -34,7 +34,7 @@ Ziel ist es, Meshtastic-Netzwerke in ioBroker sichtbar und steuerbar zu machen:
 - ioBroker mit JavaScript- und MQTT-Adapter -> Mein Szenario: ioBroker v7.7.22 mit JS adapter 9.0.11
 - Python 3 + Meshtastic CLI -> Mein Szenario: Debian Bookworm mit Python 3.11 und meshtastic cli 2.7.7
 - Mosquitto Broker als lokales MQTT-Gateway/Bridge -> Mein Szenario: Mosquitto 2.0.11 aus dem Standard Debian Repo
-- Meshtastic MQTT Parser für Nachrichten die über einen öffentlichen MQTT kommen, denn die werden von der Node ja nicht nochmal als entschlüsseltes JSON zurückgegeben -> Mein Szenarion: https://github.com/acidvegas/meshtastic-mqtt-json R2.0.0 aus dem Server hinterlegt, auf dem auch die Mosquitto Bridge läuft
+- Meshtastic MQTT Parser für Nachrichten die über einen öffentlichen MQTT kommen, denn die werden von der Node ja nicht nochmal als entschlüsseltes JSON zurückgegeben -> Mein Szenarion: https://github.com/acidvegas/meshtastic-mqtt-json R2.0.0 auf dem Server hinterlegt, auf dem auch die Mosquitto Bridge läuft
 
 ---
 
@@ -149,7 +149,7 @@ pip install meshtastic-mqtt-json
 
 - Wir brauchen ein kleines Python Script, welches uns die Nachrichten und Positionsdaten, die verschlüsselt über einen öffentlichen MQTT Server unter msh/EU_868/2/e/<channel>/ kommen, entschlüsselt und in der gleichen Form unter msh/EU_868/2/json/<channel> ablegt wie es eine Meshtastic Node tun würde.
 - Die restlichen restlichen Telemetriedaten sind nicht so zeitkritisch und können zyklisch über den meshtastic-cli geholt werden.
-- Je Kanal der gelesen werden soll wird eine entsprechend konfigurierte Datei gebraucht. Beispiel: mqtt-json-parse.py
+- Je Kanal der gelesen werden soll wird eine entsprechend konfigurierte Datei gebraucht. Beispiel: [mqtt-json-parse.py](https://github.com/c1328/meshtastic-cli-iobroker-mqtt/blob/main/mqtt-json-parse.py)
 
 ```python
 import json
