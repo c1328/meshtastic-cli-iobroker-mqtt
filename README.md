@@ -270,15 +270,17 @@ CTRL-A-D
 Beispiel:
 
 ```text
-// Configuration of IP adress of meshtastic node that is connected via TCP
-var deviceIp = '<IP-of-your-meshtastic-node>';
-// Configuration of MQTT instance that is used (in my case 3rd instance)
-var mqttPath = 'mqtt.3.msh.*.json.*'; 
-// Configuration of channel names
-var chats = [
-    { name: 'Default', id: 0 },
-    { name: '<private channel>', id: 1 },
-    { name: '<public channel>', id: 2 }
+// IP of your Meshtastic node
+const deviceIp  = "192.168.1.xxx";
+
+// MQTT path variable (note the 3 because I use the 3rd instance of mqtt at IoBroker)
+const mqttPath  = /^mqtt\.3\.msh\..*\.json\..*$/;
+
+// configure the channels of your node
+const chats = [
+    { name: "Default",  id: 0 },
+    { name: "Puig",     id: 1 },
+    { name: "Baleares", id: 2 }
 ];
 ```
 
