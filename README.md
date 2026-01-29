@@ -337,7 +337,11 @@ Das Skript arbeitet hybrid:
 
 ** Visualisierung in VIS/Jarvis: Sowohl die Positionen als auch der Chatverlauf kann über die History bzw. History-HTML Datenpunkte leicht visualiert werden
 
+---
 
+## ❌ Einschränkung
+
+Dieses Setup optimiert die Erfassung von Gruppen-Kanälen und Positionsdaten. Direktnachrichten (DMs) werden aufgrund der Ende-zu-Ende-Verschlüsselung (PKC) bewusst nicht unterstützt. Für private Kommunikation im ioBroker empfiehlt sich die Nutzung eines separaten, privaten Kanals.
 
 ---
 ## 📝 Lizenz
