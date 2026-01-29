@@ -279,8 +279,8 @@ const mqttPath  = /^mqtt\.3\.msh\..*\.json\..*$/;
 // configure the channels of your node
 const chats = [
     { name: "Default",  id: 0 },
-    { name: "Puig",     id: 1 },
-    { name: "Baleares", id: 2 }
+    { name: "<private Channel>",     id: 1 },
+    { name: "<public Channel>", id: 2 }
 ];
 ```
 
