@@ -291,26 +291,73 @@ on({ id: /^0_userdata\.0\.Meshtastic\.Nodes\..*\.command\.sendMessage$/, change:
 // ======================================================
 // CLI NODE POLLING
 // ======================================================
+/**
+ * Parst die CLI-Ausgabe von meshtastic --nodes in ein Array von Node-Objekten
+ * @param {string} data - CLI-Ausgabe
+ * @returns {Array<Object>} nodes
+ */
 function parseData(data) {
-    const lines = data.trim().split("\n");
-    const headerIndex = lines.findIndex(l => l.includes("│") && l.includes("ID"));
+    const lines = data.trim().split('\n');
+
+    // Header-Zeile finden (ID | User | …)
+    const headerIndex = lines.findIndex(l => l.includes('│') && l.includes('ID'));
     if (headerIndex === -1) return [];
 
+    // Header-Spalten extrahieren
     const keys = lines[headerIndex]
-        .split("│")
+        .split('│')
         .map(k => k.trim())
-        .filter((_, i, arr) => i > 0 && i < arr.length - 1);
+        .filter((k, i) => i > 0 && i < lines[headerIndex].split('│').length - 1);
 
+    // Zeilen filtern und Nodes erzeugen
     return lines
-        .filter(l => l.includes("│") && !l.includes("═") && !l.includes("─"))
+        .filter(l =>
+            l.includes('│') &&
+            !l.includes('═') &&       // Tabellenrahmen ausschließen
+            !l.includes('─') &&
+            !l.includes(' ID ') &&    // Header ausschließen
+            !l.includes(' User ')     // optional: User-Header ausschließen
+        )
         .map(line => {
-            const values = line.split("│").map(v => v.trim()).slice(1, -1);
+            const values = line.split('│').map(v => v.trim()).slice(1, -1);
+
             if (values.length < keys.length) return null;
+
             let obj = {};
-            keys.forEach((k, i) => (obj[k] = values[i] || "N/A"));
+            keys.forEach((key, index) => {
+                obj[key] = values[index] || "N/A";
+            });
+
+            // Node-ID normalisieren
+            if (obj.ID) obj.ID = normalizeNodeId(obj.ID);
+
+            // Nur gültige Node-IDs weitergeben
+            if (!isValidNodeId(obj.ID)) return null;
+
             return obj;
         })
-        .filter(Boolean);
+        .filter(obj => obj !== null);
+}
+
+/**
+ * Normalisiert eine Node-ID (CLI oder MQTT)
+ * @param {string} rawId
+ * @returns {string} normalizedId (8-stellig hex, lowercase)
+ */
+function normalizeNodeId(rawId) {
+    let id = String(rawId || "").replace(/^!/, "");
+    if (/^\d+$/.test(id)) id = Number(id).toString(16);
+    else id = id.replace(/^0x/, "");
+    return id.toLowerCase().padStart(8, "0");
+}
+
+/**
+ * Prüft, ob eine Node-ID gültig ist (8-stellige Hex)
+ * @param {string} id
+ * @returns {boolean}
+ */
+function isValidNodeId(id) {
+    return /^[0-9a-f]{8}$/.test(id);
 }
 
 function nodeIsKnown(id) {
