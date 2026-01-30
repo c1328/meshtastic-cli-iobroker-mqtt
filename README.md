@@ -270,13 +270,21 @@ CTRL-A-D
 Beispiel:
 
 ```text
-// IP of your Meshtastic node
-const deviceIp  = "192.168.1.xxx";
+// ======================================================
+// CONFIG
+// ======================================================
+const deviceIp        = "192.168.1.xxx";
+const mqttPath        = "mqtt.3.msh.*.json.*";
 
-// MQTT path variable (note the 3 because I use the 3rd instance of mqtt at IoBroker)
-const mqttPath  = /^mqtt\.3\.msh\..*\.json\..*$/;
+const MESHTASTIC_BIN  = "/home/iobroker/.local/bin/meshtastic";
 
-// configure the channels of your node
+const BASE            = "0_userdata.0.Meshtastic";
+const NODES           = BASE + ".Nodes";
+const CHATS           = BASE + ".Chats";
+
+const POLL_INTERVAL   = 300000;
+const HISTORY_MAX     = 10;
+
 const chats = [
     { name: "Default",  id: 0 },
     { name: "<private Channel>",     id: 1 },
