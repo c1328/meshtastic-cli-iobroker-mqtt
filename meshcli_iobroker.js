@@ -1,4 +1,12 @@
-// Meshtastic ioBroker Integration Kit
+// Meshtastic ioBroker Integration Kit (FINAL FIXED)
+// - execFile statt exec (keine Shell-Injection / Quoting-Probleme)
+// - mqttPath Variable wird genutzt
+// - robuste senderHex Erzeugung
+// - safeCreateObject / safeCreateState Wrapper
+// - konstante Pfade / Intervalle
+// - alle Funktionen aus deiner letzten Version enthalten
+// - History JSON + HTML mit Escape
+// - onStop Cleanup
 
 // ======================================================
 // CONFIG
@@ -17,12 +25,38 @@ const HISTORY_MAX     = 10;
 
 const chats = [
     { name: "Default",  id: 0 },
-    { name: "<private Channel>",     id: 1 },
-    { name: "<public Channel>", id: 2 }
+    { name: "Privat",   id: 1 },
+    { name: "Public",   id: 2 }
 ];
 
 // Node.js execFile verfügbar
 const { execFile } = require("child_process");
+
+// ======================================================
+// RETRY HANDLING (Node offline / reboot)
+// ======================================================
+let retryCount = 0;
+const RETRY_MAX   = 10;
+const RETRY_DELAY = 10000;
+
+function scheduleRetry(actionName) {
+    retryCount++;
+
+    if (retryCount > RETRY_MAX) {
+        log("Meshtastic: Abbruch nach " + RETRY_MAX +
+            " Fehlversuchen. Aktion fehlgeschlagen: " + actionName, "error");
+        retryCount = 0;
+        return;
+    }
+
+    log("Meshtastic: Node nicht erreichbar → Retry " +
+        retryCount + "/" + RETRY_MAX +
+        " in " + (RETRY_DELAY/1000) + "s (" + actionName + ")", "warn");
+
+    setTimeout(() => {
+        if (actionName === "updateNodes") updateNodes();
+    }, RETRY_DELAY);
+}
 
 // ======================================================
 // HELPERS
@@ -67,13 +101,35 @@ function toSenderHex(fromField) {
     return hex.toLowerCase().padStart(8, "0");
 }
 
-// Wrapper: meshtastic CLI call
-function runMeshtastic(args, cb) {
+// ======================================================
+// CLI CALLS (with retry)
+// ======================================================
+function runMeshtastic(args, cb, attempt = 1) {
     execFile(MESHTASTIC_BIN, args, (err, stdout, stderr) => {
+
         if (err) {
-            log("Meshtastic CLI error: " + (stderr || err), "error");
+            const actionName = args.join(" ");
+
+            if (attempt <= RETRY_MAX) {
+                log("Meshtastic offline → Retry " + attempt + "/" + RETRY_MAX +
+                    " in 10s: " + actionName, "warn");
+
+                setTimeout(() => {
+                    runMeshtastic(args, cb, attempt + 1);
+                }, RETRY_DELAY);
+
+                return;
+            }
+
+            log("Meshtastic: Abbruch nach " + RETRY_MAX +
+                " Versuchen. Aktion fehlgeschlagen: " + actionName +
+                " | Error: " + (stderr || err), "error");
+
+            if (cb) cb(err, stdout, stderr);
+            return;
         }
-        if (cb) cb(err, stdout, stderr);
+
+        if (cb) cb(null, stdout, stderr);
     });
 }
 
@@ -451,15 +507,27 @@ function updateNode(data) {
     setState(base + "battery", battVal, true);
 }
 
+// ======================================================
+// UPDATE NODES (with retry)
+// ======================================================
 function updateNodes() {
     runMeshtastic(["--host", deviceIp, "--nodes"], (err, stdout) => {
-        if (err || !stdout) return;
-        if (!stdout.includes("Connected")) return;
+
+        // Node offline / reboot → retry
+        if (err || !stdout) {
+            scheduleRetry("updateNodes");
+            return;
+        }
+
+        // Erfolg → Retry Counter zurücksetzen
+        retryCount = 0;
 
         const nodes = parseData(stdout);
+        if (!nodes.length) return;
 
         nodes.forEach(n => {
-            n.ID = String(n.ID).replace(/^!/, "");
+            n.ID = normalizeNodeId(n.ID);
+
             if (!nodeIsKnown(n.ID)) createNode(n);
             updateNode(n);
         });
