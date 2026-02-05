@@ -271,10 +271,10 @@ Prototypisch gibt es folgendes Script, welches verschlüsselte Direktnachrichten
 Das Script sollte als systemd eingerichtet werden, dann schreibt es seinen Status in das MQTT topic ```service/PKIdownlink/#```
 
 ```bash
+# Service Konfiguration anlegen
 vi /etc/systemd/system/meshtastic-decryptor@.service
-```
 
-```ini
+# mit folgendem Inhalt:
 [Unit]
 Description=Meshtastic Decryptor Service for Channel %I
 After=network.target
@@ -304,6 +304,9 @@ systemctl start meshtastic-decryptor@Kanal2
 sudo systemctl enable meshtastic-decryptor@Kanal0
 sudo systemctl enable meshtastic-decryptor@Kanal1
 sudo systemctl enable meshtastic-decryptor@Kanal2
+
+# Schauen ob alles läuft
+journalctl -u "meshtastic-decryptor@*" -f
 ```
 
 Hier ist gerne Rückmeldung erwünscht, ob das zuverlässig funktioniert.
