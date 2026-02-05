@@ -266,6 +266,12 @@ Das Skript arbeitet hybrid:
 
 Dieses Setup optimiert die Erfassung von Gruppen-Kanälen und Positionsdaten. Direktnachrichten (DMs) werden aufgrund der Ende-zu-Ende-Verschlüsselung (PKC) bewusst nicht unterstützt. Für private Kommunikation im ioBroker empfiehlt sich die Nutzung eines separaten, privaten Kanals.
 
+Prototypisch gibt es folgendes Script, welches verschlüsselte Direktnachrichten, die an Nodes aus der eigenen DB gerichtet sind und verschlüsselt über MQTT daherkommen über Lora weiterleitet: https://github.com/c1328/meshtastic-cli-iobroker-mqtt/blob/main/mqtt-pki-downlink.py
+
+Das Script sollte als systemd eingerichtet werden, dass schreibt es seinen Status in das MQTT topic ```service/PKIdownlink/#```
+
+Hier ist gerne Rückmeldung erwünscht, ob das zuverlässig funktioniert.
+
 ---
 ## 📝 Lizenz
 
