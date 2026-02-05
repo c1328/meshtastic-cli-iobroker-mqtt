@@ -1,23 +1,35 @@
+import sys
 import json
 import time
 import logging
 import paho.mqtt.client as mqtt
 from meshtastic_mqtt_json import MeshtasticMQTT
 
-# --- CONFIGURATION ---
-LOCAL_BROKER   = "mqtt"
-LOCAL_PORT     = 1883
-LOCAL_USER     = "<username>"
-LOCAL_PASS     = "<password>"
+# --- CHANNEL DATABASE ---
+# Add all your channels here
+CHANNELS = {
+    "Puig":    {"index": 0, "key": "BASE64_KEY_1"},
+    "Default": {"index": 1, "key": "BASE64_KEY_2"},
+    "Privat":  {"index": 2, "key": "BASE64_KEY_3"}
+}
 
-# Channel Details
-CHANNEL_NAME   = "<channel>"       # Name of the channel (e.g., "Puig")
-CHANNEL_INDEX  = 0                 # Channel index on the hardware (usually 0)
-CHANNEL_KEY    = "<key>"           # Base64 encryption key
-REGION         = "EU_868"
+# Get channel name from command line argument
+if len(sys.argv) < 2 or sys.argv[1] not in CHANNELS:
+    print(f"Usage: python3 decryptor.py <channel_name>")
+    print(f"Available channels: {', '.join(CHANNELS.keys())}")
+    sys.exit(1)
 
-# Path Configuration for ioBroker Monitoring
-ENCRYPTED_ROOT    = f"msh/{REGION}/2/e/"
+CHANNEL_NAME = sys.argv[1]
+CHANNEL_INDEX = CHANNELS[CHANNEL_NAME]["index"]
+CHANNEL_KEY = CHANNELS[CHANNEL_NAME]["key"]
+
+# --- REST OF CONFIGURATION ---
+LOCAL_BROKER = "mqtt"
+LOCAL_PORT = 1883
+LOCAL_USER = "user"
+LOCAL_PASS = "pass"
+REGION = "EU_868"
+ENCRYPTED_ROOT = f"msh/{REGION}/2/e/"
 SERVICE_BASE_PATH = f"service/Decryptor/{CHANNEL_NAME}"
 
 # --- LOGGING SETUP ---
