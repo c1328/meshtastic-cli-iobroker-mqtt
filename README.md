@@ -270,6 +270,42 @@ Prototypisch gibt es folgendes Script, welches verschlüsselte Direktnachrichten
 
 Das Script sollte als systemd eingerichtet werden, dann schreibt es seinen Status in das MQTT topic ```service/PKIdownlink/#```
 
+```bash
+vi /etc/systemd/system/meshtastic-decryptor@.service
+```
+
+```ini
+[Unit]
+Description=Meshtastic Decryptor Service for Channel %I
+After=network.target
+
+[Service]
+# %I (the part after @) is passed as an argument to the script
+ExecStart=/usr/bin/python3 /home/meshtastic/mqtt-json-decryptor.py %I
+WorkingDirectory=/home/meshtastic
+User=meshtastic
+Restart=always
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+# Systemd neu laden
+systemctl daemon-reload
+
+# Kanäle starten
+systemctl start meshtastic-decryptor@Kanal0
+systemctl start meshtastic-decryptor@Kanal1
+systemctl start meshtastic-decryptor@Kanal2
+
+# Autostart aktivieren
+sudo systemctl enable meshtastic-decryptor@Kanal0
+sudo systemctl enable meshtastic-decryptor@Kanal1
+sudo systemctl enable meshtastic-decryptor@Kanal2
+```
+
 Hier ist gerne Rückmeldung erwünscht, ob das zuverlässig funktioniert.
 
 ---
